@@ -1,0 +1,26 @@
+quicktests:
+  stage: test
+  image: debian:sid
+  script:
+    - apt-get update
+    - apt-get install -y autodep8 libdpkg-perl pycodestyle pyflakes3 python3-debian
+    - tests/autopkgtest_args
+    - tests/pycodestyle
+    - tests/pyflakes
+    - tests/testdesc
+
+.tests: &tests
+  script:
+    - apt-get update
+    - apt-get install -y apt-utils autodep8 build-essential debhelper libdpkg-perl procps python3 python3-debian
+    - tests/autopkgtest NullRunner NullRunnerRoot ChrootRunner
+
+tests-sid:
+  stage: test
+  image: debian:sid
+  <<: *tests
+
+tests-stable:
+  stage: test
+  image: debian:stable
+  <<: *tests

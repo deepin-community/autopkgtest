@@ -1,0 +1,150 @@
+Testing autopkgtest backends
+============================
+
+This is a cheat-sheet for developers of autopkgtest who do not have any
+particular requirements for the packages under test or the containers in
+which they are tested, and just want to prove that the various backends
+still work.
+
+The current working directory is assumed to be the autopkgtest source
+code. Omit the ./runner/ and ./tools/ prefixes to test the system copy.
+
+All examples refer to testing the 'util-linux' source package on amd64,
+in either Debian 10 or Ubuntu 18.04. Adjust as necessary for the
+distribution, architecture and package you actually want to test.
+util-linux is a convenient example of an Essential package with only
+trivial test coverage and few test-dependencies, hence quick to test.
+
+Commands prefixed with # need to be run as root, commands prefixed with $
+can be run as an ordinary user.
+
+Run all this in a virtual machine if you don't want to run as root on
+the host system (for qemu this requires nested KVM).
+
+null
+----
+
+No setup required, but you are responsible for installing build-
+and/or test-dependencies yourself.
+
+$ ./runner/autopkgtest util-linux -- null
+
+schroot
+-------
+
+# apt install schroot sbuild
+# mkdir /srv/chroot
+# sbuild-createchroot \
+--arch=amd64 \
+buster \
+/srv/chroot/buster-amd64-sbuild
+
+(if you are in the sbuild group)
+$ ./runner/autopkgtest util-linux -- schroot buster-amd64-sbuild
+(or)
+# ./runner/autopkgtest util-linux -- schroot buster-amd64-sbuild
+
+Or for Ubuntu:
+
+# apt install ubuntu-keyring
+# sbuild-createchroot \
+--arch=amd64 \
+bionic \
+/srv/chroot/bionic-amd64-sbuild
+# ./runner/autopkgtest util-linux -- schroot bionic-amd64-sbuild
+
+lxc
+---
+
+This cheat-sheet assumes lxc (>= 3).
+
+# apt install lxc
+# subnet=10.0.3
+# cat > /etc/default/lxc-net <<EOF
+USE_LXC_BRIDGE="true"
+LXC_BRIDGE="lxcbr0"
+LXC_ADDR="${subnet}.1"
+LXC_NETMASK="255.255.255.0"
+LXC_NETWORK="${subnet}.0/24"
+LXC_DHCP_RANGE="${subnet}.2,${subnet}.254"
+LXC_DHCP_MAX="253"
+LXC_DHCP_CONFILE=""
+LXC_DOMAIN=""
+EOF
+# cat > /etc/lxc/default.conf <<EOF
+lxc.net.0.type = veth
+lxc.net.0.link = lxcbr0
+lxc.net.0.flags = up
+lxc.net.0.hwaddr = 00:16:3e:xx:xx:xx
+lxc.apparmor.profile = unconfined
+EOF
+# service lxc restart
+
+# ./tools/autopkgtest-build-lxc debian buster amd64
+
+# ./runner/autopkgtest util-linux -- lxc autopkgtest-buster-amd64
+(or)
+$ ./runner/autopkgtest util-linux -- lxc --sudo autopkgtest-buster-amd64
+
+Or for Ubuntu:
+
+# ./tools/autopkgtest-build-lxc ubuntu bionic amd64
+# ./runner/autopkgtest util-linux -- lxc autopkgtest-bionic-amd64
+
+lxd
+---
+
+lxd is not available in Debian, only from third-party snap repositories.
+
+# apt install snapd
+(log out and back in to add /snap/bin to PATH)
+# snap install lxd
+
+# lxd init
+(for a simple throwaway setup, accept all defaults)
+
+# ./tools/autopkgtest-build-lxd images:debian/buster/amd64
+# lxc image list
+(you will see autopkgtest/debian/buster/amd64 listed)
+# ./runner/autopkgtest util-linux -- lxd autopkgtest/debian/buster/amd64
+
+Or for Ubuntu:
+
+# ./tools/autopkgtest-build-lxd ubuntu:bionic
+# lxc image list
+(you will see autopkgtest/ubuntu/bionic/amd64 listed)
+# ./runner/autopkgtest util-linux -- lxd autopkgtest/ubuntu/bionic/amd64
+
+qemu
+----
+
+This can be done in a VM:
+
+# apt install qemu-utils vmdb2
+# ./tools/autopkgtest-build-qemu buster ./buster.qcow2
+
+This can be done in a VM if you have nested KVM enabled, or on the host
+system. The unprivileged user needs write access to /dev/kvm, but no other
+privileges:
+
+# apt install qemu-system-x86 qemu-utils
+$ ./runner/autopkgtest util-linux -- qemu ./buster.qcow2
+
+autopkgtest-build-qemu doesn't currently work to build Ubuntu images,
+because vmdb2 assumes grub-install supports the --force-extra-removable
+option, but Ubuntu's grub-install doesn't have that option.
+Instead use a cloud image, which can be done unprivileged:
+
+$ ./tools/autopkgtest-buildvm-ubuntu-cloud --release=bionic
+$ ./runner/autopkgtest util-linux -- qemu ./autopkgtest-bionic-amd64.img
+
+(If you're running a VM inside a VM, you might need to pass something
+like --ram-size=512 after the qemu argument to make the inner VM use
+strictly less memory.)
+
+ssh (without a setup script)
+----------------------------
+
+Prepare 'machine' however you want to, then:
+
+$ autopkgtest util-linux -- ssh -H machine

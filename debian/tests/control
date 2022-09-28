@@ -1,0 +1,20 @@
+Tests: autopkgtest
+Depends: autodep8, autopkgtest, build-essential, debhelper (>= 7)
+Restrictions: needs-root
+Tests-Directory: tests
+
+Tests: pyflakes
+Depends: pyflakes3
+Tests-Directory: tests
+
+Tests: installed
+Depends: autopkgtest
+
+Tests: lxd
+Depends: autopkgtest,
+         build-essential,
+         debhelper (>= 7),
+         fakeroot,
+         iptables,
+         lxd
+Restrictions: isolation-machine, needs-root, allow-stderr, skip-not-installable,  skippable
